@@ -4,7 +4,7 @@ mod painter;
 pub use egui;
 use ggez::{
 	context::Has,
-	graphics::{self, Canvas, DrawParam, Drawable, GraphicsContext},
+	graphics::{Canvas, DrawParam, Drawable, GraphicsContext, Rect},
 };
 pub use input::Input;
 use painter::Painter;
@@ -35,7 +35,7 @@ impl Drop for GuiContext {
 			shapes,
 			pixels_per_point,
 			..
-		} = self.context.end_frame();
+		} = self.context.end_pass();
 
 		let mut painter = self.painter.lock().unwrap();
 		painter.shapes = self.context.tessellate(shapes, pixels_per_point);
@@ -107,12 +107,12 @@ impl Gui {
 			.lock()
 			.unwrap()
 			.update(ctx, self.input.scale_factor);
-		// self.input.set_scale_factor(1.0, ctx.gfx.size());
+		self.input.set_scale_factor(1.0, ctx.gfx.size());
 	}
 
 	/// Return an [`EguiContext`] for update the gui
 	pub fn ctx(&mut self) -> GuiContext {
-		self.context.begin_frame(self.input.take());
+		self.context.begin_pass(self.input.take());
 		GuiContext {
 			context: self.context.clone(),
 			painter: self.painter.clone(),
@@ -128,7 +128,7 @@ impl Drawable for Gui {
 			.draw(canvas, self.input.scale_factor);
 	}
 
-	fn dimensions(&self, _gfx: &impl Has<GraphicsContext>) -> Option<graphics::Rect> {
-		None
+	fn dimensions(&self, _gfx: &impl Has<GraphicsContext>) -> ggez::graphics::Rect {
+		Rect::default()
 	}
 }

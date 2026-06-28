@@ -1,9 +1,9 @@
 use std::time::Instant;
 
-use egui::{pos2, vec2, Key, PointerButton, Pos2, RawInput};
+use egui::{pos2, vec2, Key, Modifiers, PointerButton, Pos2, RawInput};
 use ggez::{
-	event::MouseButton,
-	input::keyboard::{KeyCode, KeyMods},
+	input::{keyboard::KeyCode, mouse::MouseButton},
+	winit::keyboard::{ModifiersState, PhysicalKey},
 };
 
 /// Contains and manages everything related to the [`egui`] input
@@ -40,15 +40,15 @@ impl Input {
 	/// use the function [text_input_event](Input:: text_input_event)
 	pub fn update(&mut self, ctx: &ggez::Context) {
 		/*======================= Keyboard =======================*/
-		for key in ctx.keyboard.pressed_keys() {
-			if ctx.keyboard.is_key_just_pressed(*key) {
+		for key in &ctx.keyboard.pressed_physical_keys {
+			if ctx.keyboard.is_physical_key_just_pressed(key) {
 				if let Some(key) = translate_keycode(*key) {
 					self.raw.events.push(egui::Event::Key {
 						key,
 						physical_key: None,
 						pressed: true,
 						repeat: false,
-						modifiers: translate_modifier(ctx.keyboard.active_mods()),
+						modifiers: translate_modifier(ctx.keyboard.active_modifiers),
 					})
 				}
 			}
@@ -72,7 +72,7 @@ impl Input {
 					},
 					pos: self.pointer_pos,
 					pressed: true,
-					modifiers: translate_modifier(ctx.keyboard.active_mods()),
+					modifiers: translate_modifier(ctx.keyboard.active_modifiers),
 				});
 			} else if ctx.mouse.button_just_released(button) {
 				self.raw.events.push(egui::Event::PointerButton {
@@ -84,7 +84,7 @@ impl Input {
 					},
 					pos: self.pointer_pos,
 					pressed: false,
-					modifiers: translate_modifier(ctx.keyboard.active_mods()),
+					modifiers: translate_modifier(ctx.keyboard.active_modifiers),
 				});
 			}
 		}
@@ -106,7 +106,12 @@ impl Input {
 
 	/// lets you know the rotation of the mouse wheel
 	pub fn mouse_wheel_event(&mut self, x: f32, y: f32) {
-		self.raw.events.push(egui::Event::Scroll(vec2(x, y)));
+		self.raw.events.push(egui::Event::MouseWheel {
+			unit: egui::MouseWheelUnit::Point,
+			delta: vec2(x, y),
+			phase: egui::TouchPhase::Move,
+			modifiers: Modifiers::NONE,
+		});
 	}
 
 	/// lets know what character is pressed on the keyboard
@@ -118,29 +123,29 @@ impl Input {
 }
 
 #[inline]
-fn translate_keycode(key: KeyCode) -> Option<egui::Key> {
+fn translate_keycode(key: PhysicalKey) -> Option<egui::Key> {
 	Some(match key {
-		KeyCode::Escape => Key::Escape,
-		KeyCode::Insert => Key::Insert,
-		KeyCode::Home => Key::Home,
-		KeyCode::Delete => Key::Delete,
-		KeyCode::End => Key::End,
-		KeyCode::PageDown => Key::PageDown,
-		KeyCode::PageUp => Key::PageUp,
-		KeyCode::Left => Key::ArrowLeft,
-		KeyCode::Up => Key::ArrowUp,
-		KeyCode::Right => Key::ArrowRight,
-		KeyCode::Down => Key::ArrowDown,
-		KeyCode::Back => Key::Backspace,
-		KeyCode::Return => Key::Enter,
-		KeyCode::Tab => Key::Tab,
-		KeyCode::Space => Key::Space,
+		PhysicalKey::Code(KeyCode::Escape) => Key::Escape,
+		PhysicalKey::Code(KeyCode::Insert) => Key::Insert,
+		PhysicalKey::Code(KeyCode::Home) => Key::Home,
+		PhysicalKey::Code(KeyCode::Delete) => Key::Delete,
+		PhysicalKey::Code(KeyCode::End) => Key::End,
+		PhysicalKey::Code(KeyCode::PageDown) => Key::PageDown,
+		PhysicalKey::Code(KeyCode::PageUp) => Key::PageUp,
+		PhysicalKey::Code(KeyCode::ArrowLeft) => Key::ArrowLeft,
+		PhysicalKey::Code(KeyCode::ArrowUp) => Key::ArrowUp,
+		PhysicalKey::Code(KeyCode::ArrowRight) => Key::ArrowRight,
+		PhysicalKey::Code(KeyCode::ArrowDown) => Key::ArrowDown,
+		PhysicalKey::Code(KeyCode::Backspace) => Key::Backspace,
+		PhysicalKey::Code(KeyCode::Enter) => Key::Enter,
+		PhysicalKey::Code(KeyCode::Tab) => Key::Tab,
+		PhysicalKey::Code(KeyCode::Space) => Key::Space,
 
-		KeyCode::A => Key::A,
-		KeyCode::K => Key::K,
-		KeyCode::U => Key::U,
-		KeyCode::W => Key::W,
-		KeyCode::Z => Key::Z,
+		PhysicalKey::Code(KeyCode::KeyA) => Key::A,
+		PhysicalKey::Code(KeyCode::KeyK) => Key::K,
+		PhysicalKey::Code(KeyCode::KeyU) => Key::U,
+		PhysicalKey::Code(KeyCode::KeyW) => Key::W,
+		PhysicalKey::Code(KeyCode::KeyZ) => Key::Z,
 
 		_ => {
 			return None;
@@ -149,16 +154,16 @@ fn translate_keycode(key: KeyCode) -> Option<egui::Key> {
 }
 
 #[inline]
-fn translate_modifier(keymods: KeyMods) -> egui::Modifiers {
+fn translate_modifier(keymods: ModifiersState) -> egui::Modifiers {
 	egui::Modifiers {
-		alt: keymods.intersects(KeyMods::ALT),
-		ctrl: keymods.intersects(KeyMods::CTRL),
-		shift: keymods.intersects(KeyMods::SHIFT),
+		alt: keymods.intersects(ModifiersState::ALT),
+		ctrl: keymods.intersects(ModifiersState::CONTROL),
+		shift: keymods.intersects(ModifiersState::SHIFT),
 
 		#[cfg(not(target_os = "macos"))]
 		mac_cmd: false,
 		#[cfg(not(target_os = "macos"))]
-		command: keymods.intersects(KeyMods::CTRL),
+		command: keymods.intersects(ModifiersState::CONTROL),
 
 		#[cfg(target_os = "macos")]
 		mac_cmd: keymods.intersects(KeyMods::LOGO),
