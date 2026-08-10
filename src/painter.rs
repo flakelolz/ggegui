@@ -97,16 +97,65 @@ impl Painter {
 	) {
 		// set textures
 		for (id, delta) in &textures_delta.set {
-			if delta.pos.is_some() {
-				eprintln!("Error: Non-zero offset texture updates are not implemented yet");
-				continue;
-			}
 			let image = match &delta.image {
 				egui::ImageData::Color(image) => color_to_image(image, ctx),
 				// egui::ImageData::Font(image) => font_to_image(image, ctx),
 			};
 
-			self.textures.insert(*id, image);
+			if let Some(pos) = delta.pos {
+				// Fetch the existing full-sized background texture we want to edit
+				if let Some(existing_image) = self.textures.get(id) {
+					// Download existing pixels from the GPU to a CPU buffer
+					let mut pixels = existing_image.to_pixels(ctx).unwrap_or_default();
+					let tex_width = existing_image.width() as usize;
+
+					let delta_width = delta.image.width();
+					let delta_height = delta.image.height();
+
+					let start_x = pos[0];
+					let start_y = pos[1];
+
+					// Directly extract color pixel data since egui 0.35 unifies them all here
+					if let egui::ImageData::Color(color_data) = &delta.image {
+						for y in 0..delta_height {
+							for x in 0..delta_width {
+								let target_x = start_x + x;
+								let target_y = start_y + y;
+
+								let target_idx = (target_y * tex_width + target_x) * 4;
+								let source_idx = y * delta_width + x;
+
+								if target_idx + 3 < pixels.len()
+									&& source_idx < color_data.pixels.len()
+								{
+									let c = color_data.pixels[source_idx];
+									pixels[target_idx] = c.r();
+									pixels[target_idx + 1] = c.g();
+									pixels[target_idx + 2] = c.b();
+									pixels[target_idx + 3] = c.a();
+								}
+							}
+						}
+					}
+
+					// Create a fresh ggez texture from our newly patched buffer from origin (0,0)
+					let updated_image = ggez::graphics::Image::from_pixels(
+						ctx,
+						&pixels,
+						ggez::graphics::ImageFormat::Rgba8UnormSrgb,
+						existing_image.width(),
+						existing_image.height(),
+					);
+
+					self.textures.insert(*id, updated_image);
+				} else {
+					// Fallback: If no texture existed yet, just treat it as a brand-new texture upload
+					self.textures.insert(*id, image);
+				}
+			} else {
+				// Regular texture update starting at (0,0)
+				self.textures.insert(*id, image);
+			}
 		}
 
 		// free textures
